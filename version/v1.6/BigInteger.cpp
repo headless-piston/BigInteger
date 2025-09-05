@@ -3,20 +3,20 @@
 #include<iomanip>
 #include<algorithm>
 #include<cmath>
-struct complex{
-    double real,imag;
-    inline complex operator+(const complex &x)const{
-        return {real+x.real,imag+x.imag};
-    }
-    inline complex operator-(const complex &x)const{
-        return {real-x.real,imag-x.imag};
-    }
-    inline complex operator*(const complex &x)const{
-        return {real*x.real-imag*x.imag,real*x.imag+x.real*imag};
-    }
-};
 namespace __FFT{
     constexpr double PI2=6.283185307179586231995927;
+    struct complex{
+        double real,imag;
+        inline complex operator+(const complex &x)const{
+            return {real+x.real,imag+x.imag};
+        }
+        inline complex operator-(const complex &x)const{
+            return {real-x.real,imag-x.imag};
+        }
+        inline complex operator*(const complex &x)const{
+            return {real*x.real-imag*x.imag,real*x.imag+x.real*imag};
+        }
+    };
     std::vector<complex> omega;
     inline void init_omega(const int &n){
         if(n<int(omega.size())) return;
@@ -154,7 +154,7 @@ public:
         bigint res;
         res.is_negative=(is_negative!=x.is_negative);
         int len=1;while(len<int(num.size()+x.num.size())) len<<=1;
-        std::vector<complex> fa(len),fb(len);
+        std::vector<__FFT::complex> fa(len),fb(len);
         for(int i=0;i<int(num.size());i++)
             fa[i]={double(num[i]),0};
         for(int i=0;i<int(x.num.size());i++)
