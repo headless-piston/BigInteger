@@ -1,0 +1,255 @@
+//bigint
+#ifndef BIGINT
+#define BIGINT
+#define BASE 10000ll
+#include<iostream>
+#include<cstring>
+#include<iomanip>
+#include<cmath>
+#include<vector>
+constexpr double PI2=6.283185307179586231995927;
+struct complex{
+    double real,imag;
+    complex(double real=0,double imag=0):real(real),imag(imag){}
+    complex operator+(const complex &x)const{return complex(real+x.real,imag+x.imag);}
+    complex operator-(const complex &x)const{return complex(real-x.real,imag-x.imag);}
+    complex operator*(const complex &x)const{return complex(real*x.real-imag*x.imag,real*x.imag+x.real*imag);}
+};
+complex omega[(1<<21)+10];
+template<size_t Size>
+class bigint{
+private:
+    inline void init_omega(int n){
+        for(int i=1;i<=n;i<<=1)
+            for(int j=0;j<(i>>1);j++){
+                double arg=PI2*j/i;
+                omega[(i>>1)+j]=complex(cos(arg),sin(arg));
+            }
+    }
+    inline void FFT(std::vector<complex> &a,int n,bool inv){
+        for(int i=0,j=0;i<n;i++){
+            if(i<j) std::swap(a[i],a[j]);
+            for(int l=n>>1;(j^=l)<l;l>>=1);
+        }
+        for(int len=2;len<=n;len<<=1)
+            for(int i=0;i<n;i+=len)
+                for(int j=0;j<(len>>1);j++){
+                    complex w=inv?complex(omega[(len>>1)+j].real,-omega[(len>>1)+j].imag):omega[(len>>1)+j];
+                    complex x=a[i+j],y=a[i+j+(len>>1)]*w;
+                    a[i+j]=x+y,a[i+j+(len>>1)]=x-y;
+                }
+        if(inv) for(int i=0;i<n;i++) a[i].real/=n;
+    }
+    int len=1;
+    int num[Size];
+    inline void init(){
+        memset(num,0,sizeof(int)*(len+2));
+        len=1;
+    }
+public:
+    bigint(){
+        memset(num,0,sizeof(num));
+        len=1;
+    }
+    template<typename T>
+    bigint(const T &x){*this=x;}
+    friend std::ostream &operator<<(std::ostream &out,const bigint &x){
+        if(x.num[0]) out<<'-';
+        out<<x.num[x.len];
+        for(int i=x.len-1;i;i--)
+            out<<std::setw(4)<<std::setfill('0')<<x.num[i];
+        return out;
+    }
+    friend std::istream &operator>>(std::istream &in,bigint &x){
+        std::string s;
+        in>>s;x=s;
+        return in;
+    }
+    template<typename T>
+    bigint &operator=(const T &a){
+        init();
+        T x=a;
+        if(x<0) num[0]=1,x=~x+1;
+        len=0;
+        while(x){
+            num[++len]=x%BASE;
+            x/=BASE;
+        }
+        return *this;
+    }
+    bigint &operator=(const std::string &a);
+    bool operator<(const bigint &a)const{
+        if(num[0]!=a.num[0]) return num[0]>a.num[0];
+        if(len!=a.len) return num[0]?len>a.len:len<a.len;
+        for(int i=len;i;i--)
+            if(num[i]!=a.num[i])
+                return num[0]?num[i]>a.num[i]:num[i]<a.num[i];
+        return false;
+    }
+    bool operator>(const bigint &a)const{
+        if(num[0]!=a.num[0]) return num[0]<a.num[0];
+        if(len!=a.len) return num[0]?len<a.len:len>a.len;
+        for(int i=len;i;i--)
+            if(num[i]!=a.num[i])
+                return num[0]?num[i]<a.num[i]:num[i]>a.num[i];
+        return false;
+    }
+    bool operator<=(const bigint &a)const{
+        if(num[0]!=a.num[0]) return num[0]>a.num[0];
+        if(len!=a.len) return num[0]?len>a.len:len<a.len;
+        for(int i=len;i;i--)
+            if(num[i]!=a.num[i])
+                return num[0]?num[i]>a.num[i]:num[i]<a.num[i];
+        return true;
+    }
+    bool operator>=(const bigint &a)const{
+        if(num[0]!=a.num[0]) return num[0]<a.num[0];
+        if(len!=a.len) return num[0]?len<a.len:len>a.len;
+        for(int i=len;i;i--)
+            if(num[i]!=a.num[i])
+                return num[0]?num[i]<a.num[i]:num[i]>a.num[i];
+        return true;
+    }
+    bool operator==(const bigint &a)const{
+        if(len!=a.len) return false;
+        for(int i=0;i<=len;i++)
+            if(num[i]!=a.num[i])
+                return false;
+        return true;
+    }
+    bool operator!=(const bigint &a)const{
+        if(len!=a.len) return true;
+        for(int i=0;i<=len;i++)
+            if(num[i]!=a.num[i])
+                return true;
+        return false;
+    }
+    bigint &operator+=(const bigint &a){
+        if(num[0]==a.num[0]){
+            long long temp=0;
+            int old_len=len;
+            len=std::max(len,a.len);
+            for(int i=1;i<=len;i++){
+                long long sum=temp;
+                if(i<=old_len) sum+=num[i];
+                if(i<=a.len) sum+=a.num[i];
+                num[i]=(int)(sum%BASE);
+                temp=sum/BASE;
+            }
+            if(temp)
+                num[++len]=temp;
+        }
+        else{
+            bool this_large=this->abs()>=a.abs();
+            const bigint &larger=this_large?*this:a;
+            const bigint &smaller=this_large?a:*this;
+            int new_len=larger.len;
+            long long temp=0;
+            for(int i=1;i<=new_len;i++){
+                long long diff=(long long)larger.num[i]-temp;
+                if(i<=smaller.len) diff-=smaller.num[i];
+                if(diff<0){
+                    diff+=BASE;
+                    temp=1;
+                }
+                else temp=0;
+                num[i]=diff;
+            }
+            len=new_len;
+            while(len>1&&num[len]==0) len--;
+            num[0]=this_large?num[0]:a.num[0];
+            if(len==1&&num[1]==0) num[0]=0;
+        }
+        return *this;
+    }
+    bigint &operator-=(const bigint &a){
+        bigint temp=a;
+        temp.num[0]^=1;
+        return *this+=temp;
+    }
+    bigint &operator*=(const bigint &a){
+        if((len==1&&num[1]==0)||(a.len==1&&a.num[1]==0)){
+            init();
+            return *this;
+        }
+        int old_len=len;
+        int old_num[Size];
+        memcpy(old_num,num,sizeof(int)*(len+10));
+        init();
+        num[0]=old_num[0]^a.num[0];
+        int len_sum=1;
+        while(len_sum<old_len+a.len)
+            len_sum<<=1;
+        std::vector<complex> fa(len_sum+10),fb(len_sum+10);
+        for(int i=0;i<old_len;i++)
+            fa[i]=complex((double)old_num[i+1],0);
+        for(int i=0;i<a.len;i++)
+            fb[i]=complex((double)a.num[i+1],0);
+        init_omega(len_sum);
+        FFT(fa,len_sum,false);
+        FFT(fb,len_sum,false);
+        for(int i=0;i<len_sum;i++)
+            fa[i]=fa[i]*fb[i];
+        FFT(fa,len_sum,true);
+        len=old_len+a.len;
+        long long temp=0;
+        for(int i=0;i<len;i++){
+            long long val=(long long)round(fa[i].real)+temp;
+            num[i+1]=(int)(val%BASE);
+            temp=val/BASE;
+        }
+        if(temp) num[++len]=temp;
+        while(len>1&&num[len]==0) len--;
+        return *this;
+    }
+    bigint &operator++(){
+        *this+=bigint(1);
+        return *this;
+    }
+    bigint &operator--(){
+        *this-=1;
+        return *this;
+    }
+    template<typename T>
+    bigint operator++(T){
+        bigint res=*this;
+        ++*this;
+        return res;
+    }
+    template<typename T>
+    bigint operator--(T){
+        bigint res=*this;
+        --*this;
+        return res;
+    }
+    friend bigint operator+(const bigint &a,const bigint &b){return bigint(a)+=b;}
+    friend bigint operator-(const bigint &a,const bigint &b){return bigint(a)-=b;}
+    friend bigint operator*(const bigint &a,const bigint &b){return bigint(a)*=b;}
+    bigint abs()const{
+        bigint res=*this;
+        res.num[0]=0;
+        return res;
+    }
+};
+template<size_t Size>
+bigint<Size> &bigint<Size>::operator=(const std::string &a){
+    init();
+    int f=0;
+    int slen=a.length();
+    if(slen>0&&a[0]=='-') num[0]=f=1;
+    len=0;
+    int temp=0,w=1;
+    for(int i=slen-1;i>=f;i--){
+        temp+=(a[i]^48)*w;
+        w=(w<<1)+(w<<3);
+        if(w==BASE||i==f){
+            num[++len]=(int)temp;
+            temp=0;
+            w=1;
+        }
+    }
+    if(temp||len==0) num[++len]=temp;
+    return *this;
+}
+#undef BASE
+#endif
