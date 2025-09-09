@@ -3,22 +3,23 @@
 #include<iomanip>
 #include<algorithm>
 #include<cmath>
+#include<stdexcept>
 namespace __FFT{
     constexpr double PI2=6.283185307179586231995927;
     struct complex{
         double real,imag;
-        inline complex operator+(const complex &x)const{
+        complex operator+(const complex &x)const{
             return {real+x.real,imag+x.imag};
         }
-        inline complex operator-(const complex &x)const{
+        complex operator-(const complex &x)const{
             return {real-x.real,imag-x.imag};
         }
-        inline complex operator*(const complex &x)const{
+        complex operator*(const complex &x)const{
             return {real*x.real-imag*x.imag,real*x.imag+x.real*imag};
         }
     };
     std::vector<complex> omega;
-    inline void init_omega(const int &n){
+    void init_omega(const int &n){
         if(n<int(omega.size())) return;
         int start=omega.empty()?1:omega.size()<<1;
         omega.resize(1<<std::__lg(n));
@@ -28,7 +29,7 @@ namespace __FFT{
                 omega[(i>>1)+j]={cos(arg),sin(arg)};
             }
     }
-    inline void FFT(std::vector<complex> &a,int n,bool inv){
+    void FFT(std::vector<complex> &a,int n,bool inv){
         for(int i=0,j=0;i<n;i++){
             if(i<j) std::swap(a[i],a[j]);
             for(int l=n>>1;(j^=l)<l;l>>=1);
@@ -57,6 +58,47 @@ private:
                 return a.num[i]<b.num[i]?-1:1;
         return 0;
     }
+    bigint left_shift(const int &k){
+        if(num.size()==1&&num[0]==0) return *this;
+        num.insert(num.begin(),k,0);
+        return *this;
+    }
+    bigint right_shift(const int &k){
+        if(k>=int(num.size())) return *this;
+        num.erase(num.begin(),num.begin()+k);
+        return *this;
+    }
+    std::pair<bigint,bigint> div_mod(const bigint &x)const{
+        if(x==0) throw std::invalid_argument("Division by zero!");
+        if(cmp_abs(*this,x)<0) return {0,*this};
+        bigint quo,rem=this->abs();
+        quo.num.resize(num.size()-x.num.size()+1);
+        for(int i=int(num.size())-int(x.num.size());i>=0;i--){
+            int low=0,high=BASE-1,res=0;
+            while(low<=high){
+                int mid=(low+high)/2;
+                bigint prod=x*mid;
+                prod.left_shift(i);
+                if(cmp_abs(prod,rem)<=0){
+                    res=mid;
+                    low=mid+1;
+                }
+                else high=mid-1;
+            }
+            quo.num[i]=res;
+            if(res!=0){
+                bigint prod=x.abs()*res;
+                prod.left_shift(i);
+                rem=rem-prod;
+            }
+        }
+        while(quo.num.size()>1&&quo.num.back()==0) quo.num.pop_back();
+        quo.is_negative=is_negative!=x.is_negative;
+        if(quo.num.size()==1&&quo.num[0]==0) quo.is_negative=false;
+        rem.is_negative=is_negative;
+        if(rem.num.size()==1&&rem.num[0]==0) rem.is_negative=false;
+        return {quo,rem};
+    }
 public:
     bigint():is_negative(false){num.push_back(0);}
     friend std::istream &operator>>(std::istream &in,bigint &a){
@@ -81,24 +123,41 @@ public:
                 return is_negative?num[i]>x.num[i]:num[i]<x.num[i];
         return false;
     }
-    inline bigint abs()const{
+    bool operator>(const bigint &x)const{return x<*this;}
+    bool operator<=(const bigint &x)const{return !(*this>x);}
+    bool operator>=(const bigint &x)const{return !(*this<x);}
+    bool operator==(const bigint &x)const{
+        if(is_negative!=x.is_negative) return false;
+        if(num.size()!=x.num.size()) return false;
+        for(int i=0;i<int(num.size());i++)
+            if(num[i]!=x.num[i]) return false;
+        return true;
+    }
+    bool operator!=(const bigint &x)const{return !(*this==x);}
+    bigint abs()const{
         bigint res=*this;res.is_negative=false;
         return res;
     }
-    bigint(const std::string &s){
-        if(!s.length()){
-            std::cerr<<"Error:An invalid number!\n";
-            return;
+    bigint(long long x){
+        num.clear();
+        if(x<0) is_negative=true,x=-x;
+        else is_negative=false;
+        if(x==0) num.push_back(0);
+        while(x){
+            num.push_back(x%BASE);
+            x/=BASE;
         }
+    }
+    bigint(const std::string &s){
+        if(!s.length())
+            throw std::invalid_argument("Error:An invalid number!");
         num.clear(),is_negative=false;
         int low=0;
         if(s[0]=='-') low=1,is_negative=true;
         int base_num=0,base_w=1;
         for(int i=int(s.length())-1;i>=low;i--){
-            if(s[i]<'0'||s[i]>'9'){
-                std::cerr<<"Error:An invalid number!\n";
-                return;
-            }
+            if(s[i]<'0'||s[i]>'9')
+                throw std::invalid_argument("Error:An invalid number!");
             base_num+=(s[i]^48)*base_w;
             base_w*=10;
             if(base_w==BASE||i==low){
@@ -106,11 +165,19 @@ public:
                 base_num=0,base_w=1;
             }
         }
-        if(!num.size()) std::cerr<<"Error:An invalid number!\n";
+        if(!num.size())
+            throw std::invalid_argument("Error:An invalid number!");
         if(num.size()==1&&num.back()==0&&is_negative)
-            std::cerr<<"Error:An invalid number!\n";
+            throw std::invalid_argument("Error:An invalid number!");
     }
-    inline bigint operator+(const bigint &x)const{
+    bigint operator-()const{
+        bigint res=*this;
+        if(res.num.size()==1&&res.num[0]==0)
+            res.is_negative=false;
+        else res.is_negative=!is_negative;
+        return res;
+    }
+    bigint operator+(const bigint &x)const{
         bigint res;
         if(is_negative==x.is_negative){
             res.is_negative=is_negative;
@@ -142,13 +209,16 @@ public:
                 else borrow=0;
                 res.num[i]=diff;
             }
-            int len=res.num.size();
-            while(len>1&&res.num[len]==0) --len;
-            res.num.resize(len);
+            while(res.num.size()>1&&res.num.back()==0) res.num.pop_back();
             if(res.num.size()==1&&res.num[0]==0)
                 res.is_negative=0;
         }
         return res;
+    }
+    bigint operator-(const bigint &x)const{
+        bigint temp=x;
+        temp.is_negative=!temp.is_negative;
+        return *this+temp;
     }
     bigint operator*(const bigint &x)const{
         bigint res;
@@ -173,10 +243,11 @@ public:
             carry=val/BASE;
         }
         if(carry) res.num[len]=carry;
-        while(len>1&&res.num[len-1]==0) --len;
-        res.num.resize(len);
+        while(res.num.size()>1&&res.num.back()==0) res.num.pop_back();
         if(res.num.size()==1&&res.num[0]==0)
             res.is_negative=false;
         return res;
     }
+    bigint operator/(const bigint &x)const{return this->div_mod(x).first;}
+    bigint operator%(const bigint &x)const{return this->div_mod(x).second;}
 };
